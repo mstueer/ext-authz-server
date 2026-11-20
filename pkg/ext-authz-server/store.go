@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/tredoe/osutil/user/crypt/sha512_crypt"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -51,12 +52,21 @@ func (s *store) IsValid(host string, authorization string) error {
 }
 
 // comparePassword verifies the presented password against the stored hash.
-// It supports bcrypt ($2a$/$2y$) and legacy SHA1 ({SHA}) htpasswd formats.
+// It supports bcrypt ($2a$/$2y$), legacy SHA1 ({SHA}), and SHA-512 crypt ($6$) htpasswd formats.
 func comparePassword(storedHash, password []byte) error {
 	if bytes.HasPrefix(storedHash, []byte("{SHA}")) {
 		return compareSHA1(storedHash[len("{SHA}"):], password)
 	}
+	if bytes.HasPrefix(storedHash, []byte("$6$")) {
+		return compareSHA512Crypt(storedHash, password)
+	}
 	return bcrypt.CompareHashAndPassword(storedHash, password)
+}
+
+// compareSHA512Crypt verifies a password against a SHA-512 crypt ($6$) hash.
+func compareSHA512Crypt(storedHash, password []byte) error {
+	c := sha512_crypt.New()
+	return c.Verify(string(bytes.TrimSpace(storedHash)), password)
 }
 
 // compareSHA1 verifies a password against a base64-encoded SHA1 hash.
